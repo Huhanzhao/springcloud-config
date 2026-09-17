@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Data Hub — A2A 接口规范与 Artifact 机制</title>
+<style>
+:root{--accent:#2563eb;--accent2:#1d4ed8;--txt:#1f2937;--muted:#6b7280;--border:#e5e7eb;--code:#111827;--bg:#f8fafc}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',-apple-system,'Microsoft YaHei',sans-serif;color:var(--txt);background:var(--bg);line-height:1.75}
+.wrap{max-width:940px;margin:0 auto;padding:0 24px 80px}
+.hero{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;padding:30px 20px;margin:0 -24px 30px}
+.hero .inner{max-width:940px;margin:0 auto;padding:0 4px}
+.hero h1{font-size:22px}
+.hero .sub{color:#dbeafe;font-size:13px;margin-top:10px}
+.hero .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.hero .tag{font-size:11px;background:rgba(255,255,255,.14);padding:4px 10px;border-radius:20px}
+.crumbs{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+.content h2{font-size:20px;color:var(--accent2);margin:26px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--border)}
+.content h3{font-size:16px;margin:20px 0 8px;color:#111827}
+.content h4{font-size:14px;margin:16px 0 6px}
+.content p{margin:10px 0;font-size:14.5px}
+.content ul,.content ol{margin:10px 0 10px 22px;font-size:14.5px}
+.content li{margin:4px 0}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+th{background:#eef2f7;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:8px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+code{background:#eef2f7;padding:1px 6px;border-radius:4px;font-size:13px;font-family:Consolas,'Courier New',monospace}
+pre{background:var(--code);color:#e5e7eb;padding:14px 16px;border-radius:8px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.55}
+pre code{background:none;color:inherit;padding:0}
+blockquote{border-left:4px solid var(--accent);background:#eff6ff;padding:10px 16px;margin:14px 0;border-radius:0 8px 8px 0;color:#334155}
+blockquote p{margin:4px 0}
+hr{border:none;border-top:1px solid var(--border);margin:22px 0}
+.part{background:#eef2f7;border-left:4px solid var(--accent);padding:12px 16px;margin:26px 0 4px;border-radius:0 8px 8px 0}
+.part h2{font-size:19px;color:var(--accent2);border:none;padding:0;margin:0}
+.part p{font-size:13px;color:var(--muted);margin:6px 0 0}
+.note{background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:10px 14px;border-radius:8px;font-size:13.5px;margin:14px 0}
+.foot{color:var(--muted);font-size:12.5px;margin-top:40px;padding-top:16px;border-top:1px solid var(--border)}
+@media(max-width:640px){.wrap{padding:0 14px 60px}.hero{margin:0 -14px 20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="inner">
+      <h1>AI Data Hub — A2A 接口规范与 Artifact 机制</h1>
+      <div class="sub">Project AI Data Hub 与 Data Agent 集成 · 关键接口 + 大结果集引用机制</div>
+      <div class="tags">
+        <span class="tag">A2A 协议</span>
+        <span class="tag">agent-card</span>
+        <span class="tag">message:send / stream</span>
+        <span class="tag">tasks / cancel</span>
+        <span class="tag">evidence + artifact_id</span>
+        <span class="tag">分页取数 · 24h TTL</span>
+      </div>
+    </div>
+  </div>
+  <div class="crumbs">来源：PD 9月交付 — A2A 接口与 Artifact 机制开发量评估请求（规格见附件）</div>
+  <div class="note"><b>暂定只提供以下 5 个接口</b>：agent-card、message:send、message:stream、get task、cancel task。其余 A2A 协议能力（task list、push notification、extended agent card、错误码、认证细节、streaming event 完整格式等）<b>有需要再行添加</b>，届时按 <a href="https://a2a-protocol.org/latest/specification/">A2A 官方协议</a> 补充。</div>
+
+  <div class="part">
+    <h2>Part 1 · A2A 接口规范（关键接口）</h2>
+    <p>agent-card / message:send / message:stream / get task / cancel task —— <b>暂定只提供这 5 个接口</b>，其他 A2A 接口有需要再行添加</p>
+  </div>
+  <div class="content">
+
+<blockquote>
+<p>本版为 <strong>Project AI Data Hub</strong> 与 Data Agent 集成时需要用到的<strong>关键接口</strong>。其他标准能力（task list、push notification、extended agent card、错误码、认证细节、streaming event 完整格式等）建议直接参考 <a href="https://a2a-protocol.org/latest/specification/">A2A 官方协议</a>，不在当前实施阶段重复定义。</p>
+</blockquote>
+<p>实施阶段需对齐以下 5 个关键接口：</p>
+<h2>1. Agent Discovery</h2>
+<p><strong>Purpose</strong>：Business Agent 获取 Data Agent 的基础信息、能力说明、支持的交互模式和 endpoint。</p>
+<p><strong>API</strong>：</p>
+<pre><code>GET /.well-known/agent-card.json
+</code></pre>
+<p><strong>Response example</strong>（符合 PRD 的 can_answer / cannot_answer 能力边界设计，即 Agent Card 能力声明）：</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;GDA PD Data Agent&quot;,
+  &quot;description&quot;: &quot;面向 ACC 的结构化产品数据查询 Agent，支持规格、对比、兼容、聚合、清单、选型、概述、生命周期等查询；通过 A2A 供 ACC Data Agent 调用。&quot;,
+  &quot;version&quot;: &quot;1.0.0&quot;,
+  &quot;url&quot;: &quot;https://gda.example.com/a2a&quot;,
+  &quot;capabilities&quot;: { &quot;streaming&quot;: true },
+  &quot;can_answer&quot;: {
+    &quot;note&quot;: &quot;下列问题类型由 GDA PD Data Agent 回答（结构化产品数据查询）&quot;,
+    &quot;domains&quot;: [
+      { &quot;id&quot;: &quot;spec&quot;, &quot;label&quot;: &quot;规格/参数&quot;, &quot;desc&quot;: &quot;规格、参数、配置、接口、分辨率、重量&quot; },
+      { &quot;id&quot;: &quot;compare&quot;, &quot;label&quot;: &quot;产品对比&quot;, &quot;desc&quot;: &quot;对比两/多产品规格差异、核心优势&quot; },
+      { &quot;id&quot;: &quot;compat&quot;, &quot;label&quot;: &quot;兼容性&quot;, &quot;desc&quot;: &quot;兼容性、适配型号、接口支持&quot; },
+      { &quot;id&quot;: &quot;aggregate&quot;, &quot;label&quot;: &quot;聚合/计数&quot;, &quot;desc&quot;: &quot;SKU 计数、按条件聚合、清单统计&quot; },
+      { &quot;id&quot;: &quot;list&quot;, &quot;label&quot;: &quot;清单/Portfolio&quot;, &quot;desc&quot;: &quot;产品清单、portfolio、在售/EOL、PN&quot; },
+      { &quot;id&quot;: &quot;recommend&quot;, &quot;label&quot;: &quot;选型/推荐&quot;, &quot;desc&quot;: &quot;基于规格/场景/接口推荐产品&quot; },
+      { &quot;id&quot;: &quot;overview&quot;, &quot;label&quot;: &quot;产品概述/名称&quot;, &quot;desc&quot;: &quot;产品身份、介绍、full name&quot; },
+      { &quot;id&quot;: &quot;lifecycle&quot;, &quot;label&quot;: &quot;生命周期/在售状态&quot;, &quot;desc&quot;: &quot;EOL 时间、在售/上市、库存状态&quot; }
+    ]
+  },
+  &quot;cannot_answer&quot;: {
+    &quot;note&quot;: &quot;以下能力不在 GDA 范围内，请交由 ACC Data Agent 处理&quot;,
+    &quot;domains&quot;: [
+      { &quot;id&quot;: &quot;content_creation&quot;, &quot;label&quot;: &quot;内容/文档创作&quot;, &quot;desc&quot;: &quot;PPT、one pager、上架模板、营销文案&quot; },
+      { &quot;id&quot;: &quot;sentiment&quot;, &quot;label&quot;: &quot;情感/反馈分析&quot;, &quot;desc&quot;: &quot;用户反馈洞察、情感分析、主题趋势&quot; },
+      { &quot;id&quot;: &quot;media_assets&quot;, &quot;label&quot;: &quot;图片/视频资产&quot;, &quot;desc&quot;: &quot;照片、图片、宣传视频、营销资料&quot; },
+      { &quot;id&quot;: &quot;chat&quot;, &quot;label&quot;: &quot;闲聊/寒暄&quot;, &quot;desc&quot;: &quot;打招呼、指代确认、闲聊&quot; }
+    ],
+    &quot;suggested_owner&quot;: &quot;ACC Data Agent&quot;
+  }
+}
+</code></pre>
+<h2>2. Send Message</h2>
+<p><strong>Purpose</strong>：Business Agent 向 Data Agent 发起一次业务问题请求。Data Agent 可以直接返回回答，也可以返回 task，由 Business Agent 后续查询或通过 streaming 接收结果。</p>
+<p><strong>API</strong>：</p>
+<pre><code>POST /message:send
+Content-Type: application/a2a+json
+Authorization: Bearer &lt;token&gt;
+</code></pre>
+<p><strong>Request example</strong>：</p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;role&quot;: &quot;ROLE_USER&quot;,
+    &quot;parts&quot;: [
+      { &quot;text&quot;: &quot;Lenovo Legion Go Charging Connector with Battery for Controllers 可以卖美国吗？请返回可销售 PN、description 和 EAN/UPC/JAN code。&quot; }
+    ],
+    &quot;metadata&quot;: {
+      &quot;requestId&quot;: &quot;req-pd-poc-001&quot;,
+      &quot;callerAgent&quot;: &quot;AI Data Hub Business Agent&quot;,
+      &quot;endUser&quot;: &quot;user001&quot;,
+      &quot;tenantId&quot;: &quot;project-ai-data-hub&quot;,
+      &quot;businessDomain&quot;: &quot;PC Accessories&quot;,
+      &quot;businessContext&quot;: {
+        &quot;scenario&quot;: &quot;product information inquiry&quot;,
+        &quot;targetCountry&quot;: &quot;US&quot;,
+        &quot;productCategory&quot;: &quot;Accessories&quot;
+      },
+      &quot;outputMode&quot;: &quot;interpreted_answer_with_evidence&quot;
+    }
+  }
+}
+</code></pre>
+<p><strong>Response example</strong>：</p>
+<pre><code class="language-json">{
+  &quot;task&quot;: {
+    &quot;id&quot;: &quot;task-pd-poc-001&quot;,
+    &quot;contextId&quot;: &quot;ctx-pd-poc-001&quot;,
+    &quot;status&quot;: { &quot;state&quot;: &quot;TASK_STATE_COMPLETED&quot; },
+    &quot;artifacts&quot;: [
+      {
+        &quot;name&quot;: &quot;answer&quot;,
+        &quot;parts&quot;: [
+          { &quot;text&quot;: &quot;该产品可以在美国销售。可销售 PN 包括 GXH1Q27134，description 为 Charging Connector-US/CA。相关 EAN/UPC/JAN 信息见返回数据明细。&quot; }
+        ],
+        &quot;metadata&quot;: {
+          &quot;evidence&quot;: [
+            { &quot;source&quot;: &quot;Product MDM / LOIS&quot;, &quot;dataObject&quot;: &quot;Accessories product information&quot;, &quot;fields&quot;: [&quot;PN&quot;, &quot;description&quot;, &quot;EAN/UPC/JAN&quot;, &quot;support country&quot;] }
+          ],
+          &quot;policyChecked&quot;: true,
+          &quot;auditId&quot;: &quot;audit-pd-poc-001&quot;
+        }
+      }
+    ]
+  }
+}
+</code></pre>
+<h2>3. Send Streaming Message</h2>
+<p><strong>Purpose</strong>：用于处理时间较长的问题（兼容性、库存、shipment 分析、跨数据源组合回答）。Business Agent 发起后，Data Agent 通过 streaming 返回 task 状态、中间结果和最终回答。</p>
+<p><strong>API</strong>：</p>
+<pre><code>POST /message:stream
+Content-Type: application/a2a+json
+Authorization: Bearer &lt;token&gt;
+Accept: text/event-stream
+</code></pre>
+<p><strong>Request example</strong>：</p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;role&quot;: &quot;ROLE_USER&quot;,
+    &quot;parts&quot;: [
+      { &quot;text&quot;: &quot;XX 产品兼容哪些设备？如果有 conditional support，请带出 footnote。&quot; }
+    ],
+    &quot;metadata&quot;: {
+      &quot;requestId&quot;: &quot;req-pd-poc-002&quot;,
+      &quot;callerAgent&quot;: &quot;AI Data Hub Business Agent&quot;,
+      &quot;endUser&quot;: &quot;user001&quot;,
+      &quot;tenantId&quot;: &quot;project-ai-data-hub&quot;,
+      &quot;businessDomain&quot;: &quot;PC Accessories&quot;,
+      &quot;businessContext&quot;: { &quot;scenario&quot;: &quot;compatibility inquiry&quot;, &quot;dataObject&quot;: &quot;Compatibility&quot; },
+      &quot;outputMode&quot;: &quot;interpreted_answer_with_evidence&quot;
+    }
+  }
+}
+</code></pre>
+<p><strong>Streaming event example</strong>：</p>
+<pre><code class="language-json">{
+  &quot;task&quot;: { &quot;id&quot;: &quot;task-pd-poc-002&quot;, &quot;status&quot;: { &quot;state&quot;: &quot;TASK_STATE_WORKING&quot; } }
+}
+</code></pre>
+<p><strong>Final event example</strong>：</p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;role&quot;: &quot;ROLE_AGENT&quot;,
+    &quot;parts&quot;: [
+      { &quot;text&quot;: &quot;该产品支持 AA 机型；部分设备为 conditional support，具体限制请参考 footnote。&quot; }
+    ],
+    &quot;metadata&quot;: {
+      &quot;evidence&quot;: [
+        { &quot;source&quot;: &quot;OCM&quot;, &quot;dataObject&quot;: &quot;Compatibility&quot;, &quot;fields&quot;: [&quot;support status&quot;, &quot;device model&quot;, &quot;footnote&quot;] }
+      ],
+      &quot;policyChecked&quot;: true,
+      &quot;auditId&quot;: &quot;audit-pd-poc-002&quot;
+    }
+  }
+}
+</code></pre>
+<h2>4. Get Task</h2>
+<p><strong>Purpose</strong>：Business Agent 查询某个 task 的当前状态和结果。适用于 message:send 返回异步 task 后，Business Agent 后续轮询结果。</p>
+<p><strong>API</strong>：</p>
+<pre><code>GET /tasks/{taskId}
+Authorization: Bearer &lt;token&gt;
+</code></pre>
+<p><strong>Response example</strong>：</p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;task-pd-poc-003&quot;,
+  &quot;contextId&quot;: &quot;ctx-pd-poc-003&quot;,
+  &quot;status&quot;: { &quot;state&quot;: &quot;TASK_STATE_COMPLETED&quot; },
+  &quot;artifacts&quot;: [
+    {
+      &quot;name&quot;: &quot;answer&quot;,
+      &quot;parts&quot;: [
+        { &quot;text&quot;: &quot;该产品当前在欧洲可用库存为 1,200 件，其中 Lenovo warehouse 800 件，Vendor VMI 400 件。&quot; }
+      ],
+      &quot;metadata&quot;: {
+        &quot;evidence&quot;: [
+          { &quot;source&quot;: &quot;SCC / S4&quot;, &quot;dataObject&quot;: &quot;Accessories Stock Data&quot;, &quot;fields&quot;: [&quot;stock quantity&quot;, &quot;storage location&quot;, &quot;stock type&quot;] }
+        ],
+        &quot;policyChecked&quot;: true,
+        &quot;auditId&quot;: &quot;audit-pd-poc-003&quot;
+      }
+    }
+  ]
+}
+</code></pre>
+<h2>5. Cancel Task</h2>
+<p><strong>Purpose</strong>：Business Agent 取消仍在执行中的 task（例如用户中断较长时间的 shipment 分析或库存查询）。</p>
+<p><strong>API</strong>：</p>
+<pre><code>POST /tasks/{taskId}:cancel
+Authorization: Bearer &lt;token&gt;
+</code></pre>
+<p><strong>Response example</strong>：</p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;task-pd-poc-004&quot;,
+  &quot;status&quot;: { &quot;state&quot;: &quot;TASK_STATE_CANCELED&quot; }
+}
+</code></pre>
+<h2>接口范围（Scope）</h2>
+<blockquote>
+<p><strong>暂定只提供以下 5 个接口</strong>，其余 A2A 协议能力（task list、push notification、extended agent card、错误码、认证细节、streaming event 完整格式等）<strong>有需要再行添加</strong>。</p>
+</blockquote>
+<p>实施阶段双方需对齐的关键接口：</p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>端点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Agent Discovery</strong></td>
+<td><code>GET /.well-known/agent-card.json</code></td>
+</tr>
+<tr>
+<td><strong>Send Message</strong></td>
+<td><code>POST /message:send</code></td>
+</tr>
+<tr>
+<td><strong>Send Streaming Message</strong></td>
+<td><code>POST /message:stream</code></td>
+</tr>
+<tr>
+<td><strong>Get Task</strong></td>
+<td><code>GET /tasks/{taskId}</code></td>
+</tr>
+<tr>
+<td><strong>Cancel Task</strong></td>
+<td><code>POST /tasks/{taskId}:cancel</code></td>
+</tr>
+</tbody></table>
+<p>其他 A2A 标准接口和协议细节，如需接入再按 <a href="https://a2a-protocol.org/latest/specification/">A2A 官方文档</a> 补充。</p>
+
+  </div>
+
+  <hr>
+
+  <div class="part">
+    <h2>Part 2 · A2A Artifact 机制（调用方指南）</h2>
+    <p>大结果集不内联返回，通过 evidence + artifact_id 引用，调用方分页取回 —— 回答“给业务 agent 提供什么数据格式”的正式方案</p>
+  </div>
+  <div class="content">
+
+<blockquote>
+<p>适用对象: 通过 A2A 协议调用 GDA agent 的集成方（其他 agent / 平台 / 外部系统）
+协议版本: A2A 1.0</p>
+</blockquote>
+<h2>1. 什么是 Artifact</h2>
+<p>当查询返回大量数据时，<strong>完整结果不会内联在响应里</strong>，而是被保存在服务端（称为 <strong>artifact</strong>）。响应中只返回数据<strong>引用</strong>（evidence，含 <code>artifact_id</code>），调用方需要时再通过分页接口取回完整数据。</p>
+<p>这样做的好处：</p>
+<ul>
+<li>响应轻量、快速返回</li>
+<li>不会因大结果导致响应超时或传输失败</li>
+<li>调用方按需取数，不用强制接收全量</li>
+</ul>
+<h2>2. 如何获取数据</h2>
+<h3>第 1 步：发送查询</h3>
+<pre><code>POST /a2a/message:send          （同步）
+POST /a2a/message:stream        （流式）
+</code></pre>
+<p><strong>请求头</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Content-Type</code></td>
+<td><code>application/a2a+json</code></td>
+</tr>
+<tr>
+<td><code>A2A-Version</code></td>
+<td><code>1.0</code></td>
+</tr>
+<tr>
+<td><code>Authorization</code></td>
+<td><code>Bearer &lt;API key&gt;</code>（需 <code>agent:chat</code> scope）</td>
+</tr>
+</tbody></table>
+<p><strong>请求体</strong>：</p>
+<pre><code class="language-json">{
+  &quot;message&quot;: { &quot;role&quot;: &quot;user&quot;, &quot;parts&quot;: [{ &quot;text&quot;: &quot;查询...&quot;, }] },
+  &quot;context&quot;: { &quot;target_agent_id&quot;: &quot;&lt;agentId&gt;&quot;, &quot;output_mode&quot;: &quot;interpreted&quot; }
+}
+</code></pre>
+<h3>第 2 步：从响应中取 <code>artifact_id</code></h3>
+<p>完成响应（<code>kind: &quot;completed&quot;</code>）的结构：</p>
+<pre><code class="language-json">{
+  &quot;kind&quot;: &quot;completed&quot;,
+  &quot;task_id&quot;: &quot;task_8b0529e7&quot;,
+  &quot;interpreted_answer&quot;: {
+    &quot;summary&quot;: &quot;查询结果摘要...&quot;,
+    &quot;evidence&quot;: [
+      {
+        &quot;source&quot;: &quot;metric view: magellanedw.dwd_prd.product_master_metric_view&quot;,
+        &quot;row_count&quot;: 500,
+        &quot;freshness&quot;: &quot;2026-08-03&quot;,
+        &quot;artifact_id&quot;: &quot;art_task_8b0529e7_metric_magellanedw_dwd_prd_product_master_metric_view&quot;
+      }
+    ]
+  }
+}
+</code></pre>
+<p><code>evidence[]</code> 里每项对应一次数据查询，<strong><code>artifact_id</code> 就是取数的钥匙</strong>。</p>
+<h3>第 3 步：分页取回完整数据</h3>
+<pre><code>GET /a2a/artifacts/:artifact_id?page=N&amp;page_size=M
+</code></pre>
+<p><strong>查询参数</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>默认</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>page</code></td>
+<td>1</td>
+<td>页码（从 1 开始）</td>
+</tr>
+<tr>
+<td><code>page_size</code></td>
+<td>100</td>
+<td>每页行数（上限 500）</td>
+</tr>
+</tbody></table>
+<p><strong>响应</strong>：</p>
+<pre><code class="language-json">{
+  &quot;artifact_id&quot;: &quot;art_task_...&quot;,
+  &quot;source&quot;: &quot;metric view: ...&quot;,
+  &quot;command&quot;: &quot;run: metric ...&quot;,
+  &quot;columns&quot;: [&quot;product_no&quot;, &quot;product_nm&quot;],
+  &quot;rows&quot;: [
+    [&quot;5M51D20897&quot;, &quot;MOUSE 400 USB-C Compact WL MS&quot;],
+    [&quot;5M51D20903&quot;, &quot;MOUSE 400 USB-C wired MS&quot;]
+  ],
+  &quot;page&quot;: 1,
+  &quot;page_size&quot;: 100,
+  &quot;total_rows&quot;: 500,
+  &quot;expires_at&quot;: &quot;2026-08-04T15:00:00Z&quot;
+}
+</code></pre>
+<p><strong>分页方式</strong>：<code>rows</code> 是 <code>(string|null)[][]</code> 二维数组，与 <code>columns</code> 对齐。翻页只需递增 <code>page</code>，直到取满 <code>total_rows</code>。</p>
+<h2>3. 生命周期与限制</h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>有效期</strong></td>
+<td>artifact 保存 <strong>24 小时</strong>（见 <code>expires_at</code>），过期后返回 <code>artifact_not_found</code></td>
+</tr>
+<tr>
+<td><strong>行数上限</strong></td>
+<td>最多存 <strong>500 行</strong>（<code>row_count</code> 可能更大，表示总命中数，超出的部分需缩小查询重取）</td>
+</tr>
+<tr>
+<td><strong>数据格式</strong></td>
+<td>仅支持表格格式输出；非表格结果 <code>rows</code> 为空（<code>columns</code> 可能为空）</td>
+</tr>
+<tr>
+<td><strong>租户隔离</strong></td>
+<td>artifact 只对同一租户的 API key 可见</td>
+</tr>
+</tbody></table>
+<h2>4. 错误处理</h2>
+<table>
+<thead>
+<tr>
+<th>HTTP</th>
+<th>code</th>
+<th>场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>401</td>
+<td><code>invalid_api_key</code></td>
+<td>API key 无效/过期</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>insufficient_scopes</code></td>
+<td>缺 <code>agent:chat</code> scope</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>artifact_not_found</code></td>
+<td>artifact 不存在/已过期/无权限</td>
+</tr>
+<tr>
+<td>400</td>
+<td><code>invalid_request</code></td>
+<td>请求体不合法</td>
+</tr>
+</tbody></table>
+<p><strong>建议</strong>：取数时先检查 <code>expires_at</code>；取到 <code>artifact_not_found</code> 时，用 <code>statement_id</code>（若提供）或重新查询获取数据。</p>
+<h2>5. 完整示例（curl）</h2>
+<pre><code class="language-bash"># 1) 发送查询
+curl -X POST https://&lt;host&gt;/a2a/message:send \
+  -H &quot;Content-Type: application/a2a+json&quot; \
+  -H &quot;A2A-Version: 1.0&quot; \
+  -H &quot;Authorization: Bearer gda_sk_...&quot; \
+  -d &#39;{
+    &quot;message&quot;: { &quot;role&quot;: &quot;user&quot;, &quot;parts&quot;: [{ &quot;text&quot;: &quot;查询在售鼠标的 PN 明细&quot; }] },
+    &quot;context&quot;: { &quot;target_agent_id&quot;: &quot;&lt;agentId&gt;&quot;, &quot;output_mode&quot;: &quot;interpreted&quot; }
+  }&#39;
+# → 响应中 evidence[].artifact_id
+
+# 2) 分页取数（第 1 页, 每页 100 行）
+curl -X GET &quot;https://&lt;host&gt;/a2a/artifacts/&lt;artifact_id&gt;?page=1&amp;page_size=100&quot; \
+  -H &quot;Content-Type: application/a2a+json&quot; \
+  -H &quot;A2A-Version: 1.0&quot; \
+  -H &quot;Authorization: Bearer gda_sk_...&quot;
+</code></pre>
+<h2>6. 对接清单</h2>
+<ol>
+<li>申请 API key（<code>agent:read</code> + <code>agent:chat</code> scopes）</li>
+<li>发送查询 → 解析 <code>interpreted_answer.evidence[]</code></li>
+<li>对每个 <code>artifact_id</code> 分页取数（直到 <code>page * page_size &gt;= total_rows</code>）</li>
+<li>处理过期（24h 内取完，或按需重新查询）</li>
+</ol>
+
+  </div>
+
+  <div class="foot">Lenovo · AI Data Hub · Project AI Data Hub 与 Data Agent 集成 · 提取自邮件（2026-08-17/08-03）</div>
+</div>
+</body>
+</html>
